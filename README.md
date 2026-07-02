@@ -14,14 +14,17 @@ CPUs aren't verified by eyeballing waveforms — they're verified by **step-and-
 against a golden reference** (cf. Google's `riscv-dv` + Spike co-simulation). DOOMtang
 is my own version of that loop, built up in three public steps:
 
-```
-   ┌──────────────────────── SystemVerilog UVM ──────────────────────────┐
-   │   sequences ─▶ driver ─▶ [ VexRiscv RTL core (DUT) ] ─▶ monitor    │
-   │                                  trace port ──────────────▲         │
-   │                                       │                             │
-   │                                  scoreboard ◀──── Spike (oracle)   │
-   │                            (per-retire step-and-compare)            │
-   └─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph uvm ["SystemVerilog UVM Environment"]
+        seq["Sequences"] --> drv["Driver"]
+        drv -->|stimulus| dut["VexRiscv RV32IMC\n(DUT)"]
+        dut -->|trace port| mon["Monitor"]
+        mon --> sb["Scoreboard"]
+        mon --> cov["Coverage"]
+    end
+    spike["Spike ISS\n(oracle)"] -->|"per-retire\nexpected state"| sb
+    sb --> pf(["✓ pass / ✗ fail"])
 ```
 
 See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the full methodology.
