@@ -1,15 +1,18 @@
-# fpga/ — Tang 20k Primer bitstream flow  (Phase 4)
+# fpga/ — Tang 20k Primer bitstream flow  (Step 3)
 
-Synthesis + place & route + programming for the **Sipeed Tang 20k Primer**
+LiteX SoC synthesis + place & route + programming for the **Sipeed Tang 20k Primer**
 (Gowin GW2A-18C), fully open-source.
 
 ```
 fpga/
 ├── constraints/    # .cst pin/timing constraints for the board + dock
 ├── flow/           # yosys (synth_gowin) -> nextpnr-gowin -> apicula (gowin_pack)
-├── soc_top.sv      # core + ROM/RAM + UART + HDMI framebuffer
-└── sw/             # bare-metal bring-up, then doomgeneric port
+├── litex/          # LiteX SoC config: VexRiscv + LiteSDCard + LiteVideo + HyperRAM
+└── sw/             # bare-metal bring-up, then doomgeneric port (DG_DrawFrame / DG_GetKey)
 ```
 
-Program with `openFPGALoader`. Fallback path boots DOOM on the proven core if the
-home-grown core misses timing/area.
+Program with `openFPGALoader`.
+
+**LiteX handles:** VexRiscv integration, HyperRAM controller, LiteSDCard (FatFS for
+WAD + binary), LiteVideo (HDMI framebuffer + DMA). The `doomgeneric` port implements
+the platform callbacks against those LiteX peripherals.

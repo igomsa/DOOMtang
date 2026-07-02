@@ -1,16 +1,7 @@
-# rtl/ — Home-grown synthesizable RTL  (Phase 3)
+# rtl/ — not part of the current plan
 
-My own **RV32IMC_Zicsr** core. Planned structure:
+A hand-written RV32IMC core was originally planned here. That was dropped — writing
+a custom core from scratch would take too long to reach DOOM. **VexRiscv** is the CPU
+for Step 3, integrated via LiteX.
 
-```
-rtl/
-├── rv32imc_core.sv     # top
-├── fetch.sv  decode.sv  execute.sv  mem.sv  writeback.sv
-├── regfile.sv  alu.sv  muldiv.sv     # M extension
-├── cexpand.sv                        # C: 16-bit -> 32-bit expander
-├── csr.sv  trap.sv                   # Zicsr + exceptions
-└── soc/                              # bus, RAM, UART, framebuffer (Phase 4)
-```
-
-Must be synthesizable for yosys → nextpnr (Gowin). Verified in `../tb/` against the
-SystemC golden model in `../model/`.
+This directory is kept as a placeholder.

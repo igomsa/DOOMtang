@@ -1,15 +1,9 @@
-# model/ — SystemC TLM golden model  (Phase 2)
+# model/ — not part of the current plan
 
-The reference oracle. A hand-written **RV32IMC instruction-set simulator** plus a
-**TLM-2.0 virtual platform**, used by the UVM scoreboard for lockstep comparison.
+A hand-written SystemC TLM-2.0 ISS was originally planned here as the Step 3
+scoreboard oracle. That was dropped in favour of **Spike** — the RISC-V Foundation's
+reference simulator — which is battle-tested and removes the need to trust a parallel
+hand-written ISS.
 
-```
-model/
-├── iss/            # rv32imc ISS: regfile, CSRs, decode, execute, traps
-├── vp/             # virtual platform: ram, uart, framebuffer (TLM targets) + bus
-├── ref_api/        # thin C API the SV/UVM scoreboard calls via DPI
-└── tests/          # cross-check harness vs spike
-```
-
-Built against nixpkgs `systemc`. Cross-checked with `spike` on the same binaries.
-Verilator `--sc` can wrap the RTL here for SystemC co-sim experiments.
+This directory is kept as a placeholder. If a SystemC peripheral model (timer, UART)
+is added later for résumé coverage, it would live here.

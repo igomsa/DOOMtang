@@ -2,8 +2,9 @@
 
 DUTs the UVM environment verifies, each self-contained.
 
-- `minialu/` — the spartan3E `MiniAlu` (Phase 1 seed DUT). _to be imported_
-- `picorv32/` — proven RV32 core: known-good DUT to validate the TB + DOOM fallback (Phase 3). _to be added_
-- `rv32imc/` — pointer to the home-grown core in `../rtl/` (Phase 3).
+- `minialu/` — the spartan3E `MiniAlu` ALU subset (Step 1 seed DUT). _to be imported_
+- `vexriscv/` — VexRiscv RV32IMC core: the Step 3 DUT, verified against Spike via
+  per-retire lockstep. Monitor taps the VexRiscv trace port.
 
-The env retargets between these via the UVM factory + config DB — same components, different DUT.
+The env retargets between these via the UVM factory + config DB — same components,
+different DUT and reference.
