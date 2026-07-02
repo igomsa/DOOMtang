@@ -28,8 +28,8 @@ The functional-coverage model (Phase 1 → 3) must close on:
 - CSR: read/write/set/clear, illegal-CSR trap;
 - traps: misaligned access, illegal instruction, `ecall`/`ebreak`.
 
-The SystemC golden model is the oracle for all of the above; the UVM scoreboard flags
-any divergence per-instruction.
+**Spike** is the oracle for all of the above; the UVM scoreboard flags any divergence
+per-instruction via per-retire step-and-compare against the VexRiscv trace port.
 
 ## Conformance backstop
 

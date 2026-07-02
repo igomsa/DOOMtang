@@ -4,77 +4,76 @@ DOOMtang is organized around one idea borrowed from real silicon CPU verificatio
 **a Design-Under-Test is only as trustworthy as the independent golden model you
 check it against.** Everything else follows from making that loop concrete.
 
-## The three implementations of one ISA
+## The three steps
 
-The same RV32IMC behavior is expressed three times, by three different means, so they
-can check each other:
+| Step | DUT | Verification oracle | Deliverable |
+|------|-----|---------------------|-------------|
+| 1 | MiniAlu (ALU subset: ADD/SUB/MUL/SHL) | inline reference function | UVM env, video content |
+| 2 | MiniAlu + memory-mapped I/O bus | hardware-in-the-loop on Tang 20k | full peripheral map demo |
+| 3 | VexRiscv RV32IMC core | Spike ISS (per-retire step-and-compare) | DOOM on Tang 20k |
 
-| # | Artifact | Language | Role | Built in |
-|---|----------|----------|------|----------|
-| A | Golden ISS | SystemC / C++ (TLM-2.0) | reference model | Phase 2 |
-| B | RTL core (mine) | SystemVerilog | the DUT | Phase 3 |
-| C | Proven core | PicoRV32 / VexRiscv | known-good DUT + DOOM fallback | Phase 3/4 |
-| — | Spike | C++ | sanity-check for **A** | Phase 2 |
-
-If A and B disagree on any retired instruction, one of them has a bug — and the UVM
-scoreboard tells you *which instruction*, *which register/CSR/memory location*, and
-*what each produced*. That is the entire game.
-
-## The verification loop (Phase 3 target)
+## The verification loop (Step 3)
 
 ```
             ┌──────────────────────── uvm_test ────────────────────────┐
             │                                                            │
-   instr.   │   sequence ──▶ sequencer ──▶ driver ──▶ ┌─────────────┐    │
-   stream   │                                          │  DUT (RTL)  │   │
-   (random  │                                          │  RV32IMC    │   │
-   + directed)                              ┌── monitor┤  core       │   │
-            │                               │          └─────────────┘    │
-            │                               ▼                             │
-            │                          ┌─────────┐   expected   ┌───────┐ │
-            │                          │scoreboard│◀────────────│ ref   │ │
-            │                          └─────────┘   (TLM call) │ model │ │
-            │                               │                   │SystemC│ │
-            │                          pass/fail                │ ISS   │ │
-            │                          + coverage               └───────┘ │
+   instr.   │   sequence ──▶ sequencer ──▶ driver ──▶ ┌─────────────┐  │
+   stream   │                                          │  VexRiscv   │  │
+   (random  │                                          │  RV32IMC    │  │
+   + directed)                                         │  core (DUT) │  │
+            │                          trace port ──▶ monitor        │  │
+            │                               │          └─────────────┘  │
+            │                               ▼                           │
+            │                          ┌─────────┐  expected  ┌───────┐ │
+            │                          │scoreboard│◀───────────│ Spike │ │
+            │                          └─────────┘ per-retire  │  ISS  │ │
+            │                               │                  └───────┘ │
+            │                          pass/fail + coverage              │
             └────────────────────────────────────────────────────────────┘
 ```
 
-- **sequence_item** = one architectural transaction (instruction + the
-  pre-state it needs / the post-state it produces).
-- **driver** applies it to the DUT through the **interface** (with SVA assertions on
-  the bus protocol).
-- **monitor** observes committed results (register writeback, memory writes, traps).
-- **scoreboard** asks the **SystemC golden model** what *should* have happened and
-  compares. This is the lockstep / step-and-compare check.
-- **coverage** tracks which opcodes, operand classes, hazards, and corner cases
-  (overflow, branch taken/not, misaligned, CSR access, traps) were actually hit.
+- **sequence_item** — one architectural transaction (instruction + pre/post-state).
+- **driver** applies it through the **interface** (with SVA assertions on the bus protocol).
+- **monitor** taps VexRiscv's **trace port** — one event per retired instruction
+  (PC, rd, wdata, mem address/data).
+- **scoreboard** drives Spike one step, compares architectural state. Any divergence
+  is a `uvm_error` with the instruction, expected state, and actual state.
+- **coverage** closes on opcodes, operand corners, hazards, and traps per `isa.md`.
 
-## Why each tool is where it is
+## Why Spike, not a hand-written ISS
 
-- **SystemC TLM-2.0 for the golden model.** TLM is the industry-standard way to write
-  fast, loosely-timed system models. Writing the ISS + memory + UART + framebuffer as
-  TLM modules (a) gives a cycle-approximate **virtual platform** that can boot software
-  *before* the RTL exists, and (b) is the exact "SystemC TLM" skill several target job
-  reqs ask for. Spike independently cross-checks it.
-- **SystemVerilog + UVM for the DUT side.** This is what DV roles actually use, and
-  what the verification env must be written in to be credible. UVM's factory + config
-  DB make the *same env* retarget from `MiniAlu` (Phase 1) to the CPU (Phase 3).
-- **Verilator/Icarus + Yosys/nextpnr for the open-source spine.** Local, reproducible,
-  NixOS-native. Verilator's `--sc` mode can even wrap the RTL as a SystemC module for
-  co-simulation experiments.
+Spike is the RISC-V Foundation's reference simulator — it *is* the spec executable.
+Writing a parallel ISS alongside VexRiscv adds implementation complexity without adding
+correctness value: if a hand-written ISS and VexRiscv agreed, you'd still need Spike to
+trust the ISS. Spike short-circuits the whole problem.
 
-## Phase 1 as the seed (MiniAlu)
+## Step 2 as the computer-architecture teaching vehicle
 
-The Phase-1 env verifies the `spartan3E_tests` **MiniAlu** — a small ALU/CPU that is
-already in this portfolio. It is deliberately chosen because:
+Before VexRiscv, Step 2 extends the MiniAlu with **LOAD/STORE opcodes + a 16-bit
+external address/data bus**, then maps real peripherals to address ranges decoded in
+FPGA fabric:
+
+| Address range | Peripheral |
+|---|---|
+| 0x0000–0x1FFF | HyperRAM (8 MB on-board, HyperBus) |
+| 0x2000–0x2FFF | SD card (SPI controller, raw sectors) |
+| 0x3000–0x3FFF | HDMI framebuffer |
+| 0x4000–0x4FFF | CH559T USB host (UART/SPI bridge → keyboard) |
+
+MiniAlu stays Harvard for instructions (ROM); the data side becomes Modified Harvard
+with the external bus. The address decoder is a combinational mux in FPGA fabric —
+every memory transaction is visible in the RTL without a CPU abstraction in the way.
+
+## Step 1 as the seed (MiniAlu)
+
+The Step-1 env verifies the `spartan3E_tests` **MiniAlu** ALU subset (ADD/SUB/MUL/SHL).
+It is deliberately chosen because:
 
 1. It exercises **every UVM component** end to end on something small and real.
-2. An ALU is the conceptual ancestor of the RISC-V datapath — the sequence_item,
-   scoreboard reference function, and coverage model port forward to Phase 3 with the
-   structure intact.
-3. It validates the **methodology** (golden-reference comparison) on a DUT simple
-   enough that any disagreement is obviously a TB bug, not a DUT mystery.
+2. The scoreboard reference function, sequence_item, and coverage model extend directly
+   into the Spike-based Step-3 scoreboard — same structure, new DUT and oracle.
+3. It validates the **methodology** (golden-reference comparison) on a DUT simple enough
+   that any disagreement is obviously a TB bug, not a DUT mystery.
 
 ## Open-source vs commercial: the honest split
 
@@ -82,9 +81,8 @@ already in this portfolio. It is deliberately chosen because:
 |-------|---------------------------|------------------------|
 | RTL elaboration & smoke sims | Verilator, Icarus | — |
 | **Full SV-UVM env** | ✗ (UVM class lib unsupported) | EDA Playground, Questa Intel Starter |
-| SystemC TLM model | systemc, Verilator `--sc` | — |
-| FPGA bitstream (Gowin) | yosys, nextpnr, apicula | (Gowin EDA optional) |
+| Spike lockstep oracle | spike (nixpkgs) | — |
+| LiteX SoC + FPGA bitstream (Gowin) | yosys, nextpnr, apicula | — |
 
-The UVM library itself is the only piece that can't run on the OSS toolchain; the repo
-is structured so a reviewer can run *everything else* with `nix-shell && make`, and run
-the UVM env in a browser via EDA Playground.
+The UVM library is the only piece that can't run on the OSS toolchain; everything else
+runs with `nix-shell && make`, and the UVM env runs in a browser via EDA Playground.
